@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+supabase/.temp/
+supabase/.branches/
+ios/*.xcodeproj
+ios/build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# local Supabase settings (publishable key + project URL)
+ios/Config.local.xcconfig

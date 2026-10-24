@@ -1,0 +1,6 @@
+// Copy to Config.local.xcconfig (git-ignored) and fill in. `$()` keeps the // in URLs from starting a comment.
+SUPABASE_URL = https:/$()/YOUR-PROJECT-REF.supabase.co
+// The *publishable* key (sb_publishable_...). Never put the secret key or the Gemini key here.
+SUPABASE_PUBLISHABLE_KEY = sb_publishable_xxxxxxxx
+// Participant codes become code@<this domain>. Must be accepted by Supabase Auth (see README).
+PARTICIPANT_EMAIL_DOMAIN = study.smallstep.example

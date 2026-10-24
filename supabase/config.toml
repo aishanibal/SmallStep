@@ -1,0 +1,18 @@
+# Used by the Supabase CLI (`supabase link`, `supabase db push`, `supabase functions deploy`).
+# Hosted-project settings that this file cannot change (e.g. email confirmation) are listed in the README.
+project_id = "smallstep"
+
+[auth]
+enable_signup = true
+minimum_password_length = 6
+
+[auth.email]
+enable_signup = true
+# Participants sign in with a synthetic code@study address; nobody can click a confirmation link.
+enable_confirmations = false
+
+[functions.suggest]
+verify_jwt = true
+
+[functions.dev-info]
+verify_jwt = true
