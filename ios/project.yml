@@ -44,11 +44,6 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-    entitlements:
-      path: SmallStep/SmallStep.entitlements
-      properties:
-        keychain-access-groups:
-          - study.smallstep.app
   SmallStepTests:
     type: bundle.unit-test
     platform: iOS
