@@ -93,6 +93,8 @@ struct LoginView: View {
             } else if try await model.signIn(code: normalized, passcode: passcode) == .unknownCredentials {
                 offerCreate = true
             }
+        } catch let error as BackendError {
+            message = error.localizedDescription
         } catch {
             message = "Sign-in didn't work."
             detail = error.localizedDescription

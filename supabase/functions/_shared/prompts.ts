@@ -29,8 +29,9 @@ export function buildPromptA(profile: Profile, gap: Gap, activities: Activity[],
   );
   return [
     "You suggest one wellness activity for a free gap in one person's day, tailored to them.",
-    "Base it on their own activities and history below. It can be one of their activities as is, a shorter or adapted",
-    "version of one, or a new idea in the same spirit. It must fit inside the gap.",
+    "Base it on their own activities and history below. Write a shorter or adapted version of one of their activities,",
+    "or a new idea in the same spirit. The title must not be the same as any activity name on their list.",
+    "It must fit inside the gap.",
     "",
     "Guidance:",
     "- Prefer the kinds of activities this person completes and rates as a good fit in similar time-of-day and gap-length slots (see History).",
@@ -62,6 +63,7 @@ export function buildPromptB(gap: Gap): string {
   const energy = gap.energy === null ? "" : ` and energy level ${gap.energy} (1 = low, 3 = high)`;
   return [
     `I have ${gap.minutes} minutes${energy}. What should I do for my wellness?`,
+    "Suggest one simple generic idea that a stranger could do. Do not make it a personal routine.",
     "",
     'Reply with JSON only: {"title": "<2-5 words>", "description": "<one short sentence>", "duration_min": <whole number of minutes, at most ' +
     `${gap.minutes}>}`,

@@ -62,13 +62,14 @@ Deno.test("same model, one call each for A and B", async () => {
   assertEquals(m.prompts.length, 2);
 });
 
-Deno.test("C avoids A's activity so there are three cards; merging only when there is no other option", async () => {
+Deno.test("C avoids A's activity and a copied title still leaves three cards", async () => {
   const exact = { ...goodA, title: "Morning walk", duration_min: 20, based_on: "walk" };
   const r = await generateCards(input(), deps(modelReturning(exact, goodB).call));  // rng 0 would have picked walk
   assertEquals(sourcesOf(r.cards), ["A", "B", "C"]);
   assert(r.cards.find((x) => x.sources[0] === "C")!.activityId !== "walk");
   const only = await generateCards(input({ activities: [walk] }), deps(modelReturning(exact, goodB).call));
-  assertEquals(sourcesOf(only.cards), ["A+C", "B"]);
+  assertEquals(sourcesOf(only.cards), ["A", "B", "C"]);
+  assertEquals(only.cards.length, 3);
   const variation = { ...goodA, title: "Walk to the corner", duration_min: 15, based_on: "walk" };
   assertEquals(sourcesOf((await generateCards(input(), deps(modelReturning(variation, goodB).call))).cards), ["A", "B", "C"]);
 });

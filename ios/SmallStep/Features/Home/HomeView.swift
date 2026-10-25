@@ -4,6 +4,8 @@ enum Route: Hashable {
     case gap
     case suggestions(SuggestionSet, minutes: Int)
     case outcome(OutcomeContext)
+    case activities
+    case history
 }
 
 struct OutcomeContext: Hashable {
@@ -55,6 +57,8 @@ struct HomeView: View {
 
                 VStack(spacing: 8) {
                     Button("Get suggestions") { navigator.path.append(.gap) }.buttonStyle(PrimaryButtonStyle())
+                    Button("Your activities") { navigator.path.append(.activities) }.buttonStyle(QuietButtonStyle())
+                    Button("History") { navigator.path.append(.history) }.buttonStyle(QuietButtonStyle())
                     Button("Sign out") { Task { await model.signOut() } }.buttonStyle(QuietButtonStyle())
                 }
             }
@@ -65,6 +69,8 @@ struct HomeView: View {
                 case .gap: GapEntryView()
                 case .suggestions(let result, let minutes): SuggestionsView(result: result, minutes: minutes)
                 case .outcome(let context): OutcomeView(context: context)
+                case .activities: ActivitiesManageView()
+                case .history: HistoryView()
                 }
             }
         }

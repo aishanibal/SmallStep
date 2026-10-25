@@ -147,6 +147,61 @@ struct PendingOutcome: Hashable {
     let card: SuggestionCard
 }
 
+struct HistoryOutcome: Decodable {
+    let id: UUID
+    let chosenSuggestionId: UUID?
+    let completed: Bool?
+    let skipReason: String?
+    let fitRating: Int?
+    let noneReason: String?
+    let ts: Date
+    enum CodingKeys: String, CodingKey {
+        case id, completed, ts
+        case chosenSuggestionId = "chosen_suggestion_id"
+        case skipReason = "skip_reason", fitRating = "fit_rating", noneReason = "none_reason"
+    }
+}
+
+/// One line in the participant's history. No suggestion source.
+struct HistoryEntry: Identifiable, Hashable {
+    let id: UUID
+    let title: String
+    let at: Date
+    let status: String
+    let detail: String?
+
+    init(row: HistoryOutcome, cardTitle: String?) {
+        id = row.id
+        at = row.ts
+        if row.chosenSuggestionId == nil {
+            title = "None of these"
+            status = "None of these"
+            detail = Self.noneLabels[row.noneReason ?? ""]
+        } else {
+            title = cardTitle ?? "A suggestion"
+            if row.completed == true {
+                status = "Done"
+                detail = row.fitRating.map { "Fit \($0) of 5" }
+            } else if row.completed == false {
+                status = "Skipped"
+                detail = Self.skipLabels[row.skipReason ?? ""]
+            } else {
+                status = "Still open"
+                detail = nil
+            }
+        }
+    }
+
+    private static let skipLabels = [
+        "no_energy": "No energy", "ran_out_of_time": "Ran out of time",
+        "changed_my_mind": "Changed my mind", "wrong_place": "Wrong place", "something_else": "Something else",
+    ]
+    private static let noneLabels = [
+        "not_now": "Not now", "not_interested": "Not interested",
+        "wrong_length": "Wrong length", "wrong_place": "Wrong place", "something_else": "Something else",
+    ]
+}
+
 /// Response of the `dev-info` function, shown only on the hidden developer screen.
 struct DevInfo: Decodable {
     struct Last: Decodable {
