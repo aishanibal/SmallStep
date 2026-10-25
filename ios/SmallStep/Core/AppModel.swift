@@ -66,11 +66,12 @@ final class AppModel {
 
     /// Signed in: load the participant's data. If that fails, say so instead of staying on the login screen.
     private func finishSignIn() async throws {
-        userID = await backend?.currentUserID()
+        guard let backend else { throw BackendError.notConfigured }
+        userID = try await backend.requireUserID()
         try await load()
         // Record the consent the participant gave on this device.
         if let id = userID, profile?.consentedAt == nil {
-            try? await backend?.updateProfile(id, ProfileUpdate(consentedAt: Date()))
+            try? await backend.updateProfile(id, ProfileUpdate(consentedAt: Date()))
             await refresh()
         }
     }
@@ -118,11 +119,18 @@ final class AppModel {
         if defaults.object(forKey: Key.setupStarted) == nil { defaults.set(Date(), forKey: Key.setupStarted) }
     }
 
-    func saveActivities(_ drafts: [ActivityDraft]) async throws {
+    /// `advanceSetup` moves on from the first-time list. Later edits from Home stay where they are.
+    func saveActivities(_ drafts: [ActivityDraft], advanceSetup: Bool = true) async throws {
         guard let backend, let id = userID else { throw BackendError.notConfigured }
         try await backend.saveActivities(existing: activities, drafts: drafts)
         activities = try await backend.loadActivities(id)
+        guard advanceSetup else { return }
         stage = profile?.hasRhythm == true ? .home : .setupRhythm
+    }
+
+    func loadHistory() async throws -> [HistoryEntry] {
+        guard let backend, let id = userID else { throw BackendError.notConfigured }
+        return try await backend.loadHistory(id)
     }
 
     func saveRhythm(_ update: ProfileUpdate) async throws {

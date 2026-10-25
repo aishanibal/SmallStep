@@ -15,7 +15,8 @@ configFiles:
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
-    from: 2.55.0
+    # 2.50+ needs Swift tools 6.1 (Xcode 16.3). This Mac has Xcode 16.2 / Swift 6.0.
+    minorVersion: 2.49.0
 targets:
   SmallStep:
     type: application
@@ -43,6 +44,11 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+    entitlements:
+      path: SmallStep/SmallStep.entitlements
+      properties:
+        keychain-access-groups:
+          - study.smallstep.app
   SmallStepTests:
     type: bundle.unit-test
     platform: iOS

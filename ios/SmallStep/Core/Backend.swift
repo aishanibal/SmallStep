@@ -5,6 +5,8 @@ import Supabase
 enum BackendError: LocalizedError {
     case notConfigured
     case signUpNeedsConfirmation
+    case codeAlreadyUsed
+    case sessionNotKept
     case setupIncomplete
     case server(String)
 
@@ -12,6 +14,8 @@ enum BackendError: LocalizedError {
         switch self {
         case .notConfigured: "The app isn't connected to the study yet."
         case .signUpNeedsConfirmation: "This study account needs an email step that isn't switched on. Please tell the study team."
+        case .codeAlreadyUsed: "That code is already in use. Check the passcode, or choose another code."
+        case .sessionNotKept: "This phone couldn't keep you signed in. Please try again."
         case .setupIncomplete: "Let's finish setting up first."
         case .server(let detail): detail
         }
@@ -35,8 +39,21 @@ final class Backend {
     // MARK: Auth
 
     func currentUserID() async -> UUID? {
-        guard let session = try? await client.auth.session, !session.isExpired else { return nil }
-        return session.user.id
+        try? await requireUserID()
+    }
+
+    /// The signed-in participant, or an error the login screen can show. A missing keychain session
+    /// must not look like a successful sign-in.
+    func requireUserID() async throws -> UUID {
+        do {
+            let session = try await client.auth.session
+            if session.isExpired { throw BackendError.sessionNotKept }
+            return session.user.id
+        } catch let error as BackendError {
+            throw error
+        } catch {
+            throw BackendError.sessionNotKept
+        }
     }
 
     func signIn(email: String, passcode: String) async throws -> SignInResult {
@@ -50,8 +67,20 @@ final class Backend {
     }
 
     func createAccount(email: String, passcode: String) async throws {
-        let response = try await client.auth.signUp(email: email, password: passcode)
-        if response.session == nil { throw BackendError.signUpNeedsConfirmation }
+        let response: AuthResponse
+        do {
+            response = try await client.auth.signUp(email: email, password: passcode)
+        } catch let error as AuthError {
+            if case .api(_, let code, _, _) = error, code == .emailExists || code == .userAlreadyExists {
+                throw BackendError.codeAlreadyUsed
+            }
+            throw error
+        }
+        // GoTrue hides an existing account as a user with no identities and no session.
+        if response.session == nil {
+            if response.user.identities?.isEmpty == true { throw BackendError.codeAlreadyUsed }
+            throw BackendError.signUpNeedsConfirmation
+        }
     }
 
     func signOut() async { try? await client.auth.signOut() }
@@ -138,5 +167,20 @@ final class Backend {
         let card: SuggestionCard = try await client.from("suggestions")
             .select("id, title, description, duration_min, position").eq("id", value: suggestionID).single().execute().value
         return PendingOutcome(outcomeId: open.id, card: card)
+    }
+
+    /// Newest first. Titles come from the cards the participant is allowed to read. Sources stay hidden.
+    func loadHistory(_ participant: UUID) async throws -> [HistoryEntry] {
+        let rows: [HistoryOutcome] = try await client.from("outcomes")
+            .select("id, chosen_suggestion_id, completed, skip_reason, fit_rating, none_reason, ts")
+            .eq("participant_id", value: participant).order("ts", ascending: false).limit(100).execute().value
+        let chosen = Array(Set(rows.compactMap(\.chosenSuggestionId)))
+        var titles: [UUID: String] = [:]
+        if !chosen.isEmpty {
+            let cards: [SuggestionCard] = try await client.from("suggestions")
+                .select("id, title, description, duration_min, position").in("id", values: chosen).execute().value
+            for card in cards { titles[card.id] = card.title }
+        }
+        return rows.map { HistoryEntry(row: $0, cardTitle: $0.chosenSuggestionId.flatMap { titles[$0] }) }
     }
 }
