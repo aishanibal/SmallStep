@@ -3,13 +3,22 @@ import SwiftUI
 struct SuggestionsView: View {
     @Environment(AppModel.self) private var model
     @Environment(Navigator.self) private var navigator
-    let result: SuggestionSet
     let minutes: Int
+    /// The gap these cards were built for, so "Suggest something else" can ask again without a new gap.
+    let gapID: UUID?
 
+    @State private var result: SuggestionSet
     @State private var selected: UUID?
     @State private var showNone = false
     @State private var busy = false
+    @State private var swapping = false
     @State private var message: String?
+
+    init(result: SuggestionSet, minutes: Int, gapID: UUID? = nil) {
+        self.minutes = minutes
+        self.gapID = gapID
+        _result = State(initialValue: result)
+    }
 
     private var cards: [SuggestionCard] { result.cards.sorted { $0.position < $1.position } }
 
@@ -45,8 +54,14 @@ struct SuggestionsView: View {
                     Button(action: { Task { await choose() } }) {
                         if busy { ProgressView().tint(Color.ssOnSage) } else { Text("Choose") }
                     }
-                    .buttonStyle(PrimaryButtonStyle()).disabled(selected == nil || busy)
-                    Button("None of these") { showNone = true }.buttonStyle(QuietButtonStyle()).disabled(busy)
+                    .buttonStyle(PrimaryButtonStyle()).disabled(selected == nil || busy || swapping)
+                    if gapID != nil {
+                        Button(action: { Task { await another() } }) {
+                            if swapping { ProgressView().tint(Color.ssBlue) } else { Text("Suggest something else") }
+                        }
+                        .buttonStyle(QuietButtonStyle()).disabled(busy || swapping)
+                    }
+                    Button("None of these") { showNone = true }.buttonStyle(QuietButtonStyle()).disabled(busy || swapping)
                 }
             }
         }
@@ -71,6 +86,7 @@ struct SuggestionsView: View {
     }
 
     private func choose() async {
+        guard !busy, !swapping else { return }
         guard let backend = model.backend, let setID = result.setId, let id = selected,
               let card = cards.first(where: { $0.id == id }) else { return }
         busy = true; message = nil
@@ -81,6 +97,19 @@ struct SuggestionsView: View {
             navigator.path.append(.outcome(.init(outcomeId: outcomeID, card: card, start: .chosen)))
         } catch {
             message = "That didn't go through. Please try again."
+        }
+    }
+
+    private func another() async {
+        guard !swapping, let gapID, let setID = result.setId else { return }
+        swapping = true
+        message = nil
+        selected = nil
+        defer { swapping = false }
+        do {
+            result = try await model.anotherSuggestions(setID: setID, gapID: gapID)
+        } catch {
+            message = "Couldn't load new suggestions. Try again."
         }
     }
 

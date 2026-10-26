@@ -173,7 +173,11 @@ struct HistoryEntry: Identifiable, Hashable {
     init(row: HistoryOutcome, cardTitle: String?) {
         id = row.id
         at = row.ts
-        if row.chosenSuggestionId == nil {
+        if row.noneReason == "wanted_another" {
+            title = "Asked for other ideas"
+            status = "Swapped"
+            detail = nil
+        } else if row.chosenSuggestionId == nil {
             title = "None of these"
             status = "None of these"
             detail = Self.noneLabels[row.noneReason ?? ""]

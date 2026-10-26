@@ -147,10 +147,18 @@ final class AppModel {
     }
 
     /// Saves a gap (start, minutes, optional energy; never anything from a calendar) and asks for ideas.
-    func requestSuggestions(start: Date, minutes: Int, energy: Int?) async throws -> SuggestionSet {
+    func requestSuggestions(start: Date, minutes: Int, energy: Int?) async throws -> (set: SuggestionSet, gapID: UUID) {
         guard let backend else { throw BackendError.notConfigured }
         await syncTimeZone()
         let gapID = try await backend.insertGap(GapInsert(startTime: start, minutes: min(max(minutes, 5), GapFinder.maxMinutes), energy: energy))
+        let set = try await backend.suggest(gapID: gapID)
+        return (set, gapID)
+    }
+
+    /// Records that this set was turned down in favor of new ideas, then asks again for the same gap.
+    func anotherSuggestions(setID: UUID, gapID: UUID) async throws -> SuggestionSet {
+        guard let backend else { throw BackendError.notConfigured }
+        try await backend.recordAnother(setID: setID)
         return try await backend.suggest(gapID: gapID)
     }
 

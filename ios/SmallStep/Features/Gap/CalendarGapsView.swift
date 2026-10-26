@@ -99,8 +99,8 @@ struct CalendarGapsView: View {
         busy = true; message = nil
         defer { busy = false }
         do {
-            let result = try await model.requestSuggestions(start: gap.start, minutes: gap.minutes, energy: energy)
-            navigator.path.append(.suggestions(result, minutes: min(gap.minutes, GapFinder.maxMinutes)))
+            let request = try await model.requestSuggestions(start: gap.start, minutes: gap.minutes, energy: energy)
+            navigator.path.append(.suggestions(request.set, minutes: min(gap.minutes, GapFinder.maxMinutes), gapID: request.gapID))
         } catch BackendError.setupIncomplete {
             await model.refresh()
         } catch {

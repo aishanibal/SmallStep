@@ -67,8 +67,8 @@ struct GapEntryView: View {
         busy = true; message = nil
         defer { busy = false }
         do {
-            let set = try await model.requestSuggestions(start: now, minutes: minutes, energy: energy)
-            navigator.path.append(.suggestions(set, minutes: minutes))
+            let request = try await model.requestSuggestions(start: now, minutes: minutes, energy: energy)
+            navigator.path.append(.suggestions(request.set, minutes: minutes, gapID: request.gapID))
         } catch BackendError.setupIncomplete {
             await model.refresh()
         } catch {

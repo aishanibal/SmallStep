@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Route: Hashable {
     case gap
-    case suggestions(SuggestionSet, minutes: Int)
+    case suggestions(SuggestionSet, minutes: Int, gapID: UUID)
     case outcome(OutcomeContext)
     case activities
     case history
@@ -67,7 +67,7 @@ struct HomeView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .gap: GapEntryView()
-                case .suggestions(let result, let minutes): SuggestionsView(result: result, minutes: minutes)
+                case .suggestions(let result, let minutes, let gapID): SuggestionsView(result: result, minutes: minutes, gapID: gapID)
                 case .outcome(let context): OutcomeView(context: context)
                 case .activities: ActivitiesManageView()
                 case .history: HistoryView()

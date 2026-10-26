@@ -160,7 +160,7 @@ export function buildHistorySummary(input: HistoryInput): string[] {
   const nones = new Map<string, number>();
   for (const e of events) {
     if (!e.isNone || nowMs - new Date(e.ts).getTime() > cfg.recentSkipDays * DAY_MS) continue;
-    const r = e.noneReason ? words(e.noneReason) : "no reason given";
+    const r = e.noneReason === "wanted_another" ? "asked for different ideas" : (e.noneReason ? words(e.noneReason) : "no reason given");
     nones.set(r, (nones.get(r) ?? 0) + 1);
   }
   if (nones.size > 0) {
@@ -197,7 +197,10 @@ export function buildHistorySummary(input: HistoryInput): string[] {
   // Last 5 events, newest first (always present).
   const recent = [...events].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, cfg.lastEventCount);
   const label = (e: HistoryEvent) => {
-    if (e.isNone) return e.noneReason ? `none of these (${words(e.noneReason)})` : "none of these";
+    if (e.isNone) {
+      if (e.noneReason === "wanted_another") return "asked for different ideas";
+      return e.noneReason ? `none of these (${words(e.noneReason)})` : "none of these";
+    }
     const name = e.chosenActivityId ? (nameOf.get(e.chosenActivityId) ?? "a removed activity") : clean(e.chosenTitle) || "an idea";
     const fit = e.fitRating ? `, fit ${e.fitRating}/5` : "";
     if (e.completed === true) return `${name} done${fit}`;

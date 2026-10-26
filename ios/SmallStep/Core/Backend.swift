@@ -153,6 +153,17 @@ final class Backend {
         try await client.from("outcomes").insert(OutcomeInsert(setId: setID, noneReason: reason)).execute()
     }
 
+    /// Marks a set as "asked for other ideas." A second tap on the same set is already saved.
+    func recordAnother(setID: UUID) async throws {
+        do {
+            try await chooseNone(setID: setID, reason: "wanted_another")
+        } catch {
+            let code = (error as? PostgrestError)?.code
+            let message = error.localizedDescription.lowercased()
+            guard code == "23505" || message.contains("duplicate") || message.contains("unique") else { throw error }
+        }
+    }
+
     func updateOutcome(_ id: UUID, _ update: OutcomeUpdate) async throws {
         try await client.from("outcomes").update(update).eq("id", value: id).execute()
     }

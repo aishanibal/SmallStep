@@ -152,3 +152,9 @@ Deno.test("reasons for choosing none of these are summarised", () => {
   ];
   assertEquals(line(summarize(e), "Chose"), 'Chose "none of these" in the last 14 days: wrong length x2; not now.');
 });
+
+Deno.test("asking for different ideas is recorded apart from turning a set down", () => {
+  const lines = summarize([event({ daysAgo: 1, gapLocal: "09:00", isNone: true, noneReason: "wanted_another" })]);
+  assertStringIncludes(line(lines, "Chose"), "asked for different ideas");
+  assertStringIncludes(line(lines, "Last events"), "asked for different ideas");
+});
