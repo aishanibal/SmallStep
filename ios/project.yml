@@ -15,8 +15,8 @@ configFiles:
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
-    # 2.50+ needs Swift tools 6.1 (Xcode 16.3). This Mac has Xcode 16.2 / Swift 6.0.
-    minorVersion: 2.49.0
+    # 2.50+ needs Swift tools 6.1 (Xcode 16.3+). 2.49 fails to resolve on Xcode 26 (default-traits error).
+    from: 2.55.0
 targets:
   SmallStep:
     type: application
@@ -39,7 +39,6 @@ targets:
         UILaunchScreen: {}
         SUPABASE_URL: $(SUPABASE_URL)
         SUPABASE_PUBLISHABLE_KEY: $(SUPABASE_PUBLISHABLE_KEY)
-        PARTICIPANT_EMAIL_DOMAIN: $(PARTICIPANT_EMAIL_DOMAIN)
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:

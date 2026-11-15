@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>PARTICIPANT_EMAIL_DOMAIN</key>
-	<string>$(PARTICIPANT_EMAIL_DOMAIN)</string>
 	<key>SUPABASE_PUBLISHABLE_KEY</key>
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>SUPABASE_URL</key>

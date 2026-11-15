@@ -20,9 +20,6 @@ struct ConsentView: View {
                 .softCard()
             } else {
                 VStack(alignment: .leading, spacing: 18) {
-                    // PLACEHOLDER TEXT: replace with the approved consent wording before real participants use the app.
-                    Text("[Placeholder consent text. The study team will replace this.]")
-                        .ssSecondaryText()
                     point("doc.text", "This app is part of a class study (CS 4261). What you do in the app is recorded for that study.")
                     point("icloud", "Your answers and activity are stored in the cloud, under a code instead of your name.")
                     point("sparkles", "To create ideas, a summary of your free time, activity names and wellness line is processed by an LLM provider. Calendar event titles are never sent.")

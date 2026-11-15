@@ -33,6 +33,27 @@ Deno.test("ignores thought parts", async () => {
 Deno.test("fails clearly when unconfigured, on HTTP errors, and on empty replies", async () => {
   await assertRejects(() => geminiCaller(undefined, "m")("p"), Error, "GEMINI_API_KEY");
   await assertRejects(() => geminiCaller("k", undefined)("p"), Error, "GEMINI_MODEL");
-  await assertRejects(() => geminiCaller("k", "m", fakeFetch(429, {}))("p"), Error, "http 429");
+  await assertRejects(() => geminiCaller("k", "m", fakeFetch(429, {}), 1000, 0)("p"), Error, "http 429");
+  await assertRejects(() => geminiCaller("k", "m", fakeFetch(400, {}), 1000, 0)("p"), Error, "http 400");
   await assertRejects(() => geminiCaller("k", "m", fakeFetch(200, { candidates: [] }))("p"), Error, "no text");
+});
+
+Deno.test("retries once when the model is overloaded, but not on other errors", async () => {
+  const flaky = (statuses: number[], calls: { n: number }): typeof fetch =>
+    (() => {
+      const status = statuses[calls.n++];
+      return Promise.resolve(new Response(JSON.stringify(status === 200 ? ok : {}), { status }));
+    }) as typeof fetch;
+  const c1 = { n: 0 };
+  assertEquals((await geminiCaller("k", "m", flaky([503, 200], c1), 1000, 0)("p")).text, '{"a":1}');
+  assertEquals(c1.n, 2);
+  const c2 = { n: 0 };
+  await assertRejects(() => geminiCaller("k", "m", flaky([400, 200], c2), 1000, 0)("p"), Error, "http 400");
+  assertEquals(c2.n, 1);
+});
+
+Deno.test("asks for low thinking so replies arrive inside the timeout", async () => {
+  const seen: { url?: string; init?: RequestInit } = {};
+  await geminiCaller("k", "m", fakeFetch(200, ok, seen))("p");
+  assertEquals(JSON.parse(String(seen.init!.body)).generationConfig.thinkingConfig, { thinkingLevel: "low" });
 });

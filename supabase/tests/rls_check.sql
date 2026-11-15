@@ -16,8 +16,11 @@ insert into public.suggestion_sets (id, participant_id, gap_id)
   values ('bbbbbbbb-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-00000000000b', 'bbbbbbbb-0000-0000-0000-000000000002');
 insert into public.suggestions (id, set_id, sources, title, description, duration_min, position)
   values ('bbbbbbbb-0000-0000-0000-000000000004', 'bbbbbbbb-0000-0000-0000-000000000003', array['A'], 't', 'd', 5, 0);
-insert into public.outcomes (participant_id, set_id, chosen_suggestion_id)
-  values ('bbbbbbbb-0000-0000-0000-00000000000b', 'bbbbbbbb-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000004');
+insert into public.outcomes (id, participant_id, set_id, chosen_suggestion_id, completed)
+  values ('bbbbbbbb-0000-0000-0000-000000000005', 'bbbbbbbb-0000-0000-0000-00000000000b', 'bbbbbbbb-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000004', true);
+
+insert into public.reminder_windows (id, participant_id, weekday, start_time, minutes)
+  values ('bbbbbbbb-0000-0000-0000-000000000006', 'bbbbbbbb-0000-0000-0000-00000000000b', 1, '14:00', 45);
 
 -- A's own gap and set, so A has something legitimate to work with.
 insert into public.gaps (id, participant_id, start_time, minutes)
@@ -78,6 +81,31 @@ begin
     raise exception 'FAIL A inserted an outcome as B';
   exception when insufficient_privilege or unique_violation then null; end;
 
+  begin  -- reminder events can only be logged against your own outcomes
+    insert into public.reminder_events (id, outcome_id, kind, at)
+      values (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000005', 'snoozed', now());
+    raise exception 'FAIL A logged a reminder event on B outcome';
+  exception when insufficient_privilege then null; end;
+
+  perform 1 from public.reminder_windows where id = 'bbbbbbbb-0000-0000-0000-000000000006';
+  if found then raise exception 'FAIL A can see B reminder window'; end if;
+  update public.reminder_windows set removed_at = now() where id = 'bbbbbbbb-0000-0000-0000-000000000006';
+  get diagnostics n = row_count;  if n <> 0 then raise exception 'FAIL A removed B reminder window'; end if;
+  begin  -- a gap can't point at someone else's window
+    insert into public.gaps (start_time, minutes, origin, window_id)
+      values (now(), 30, 'window_reminder', 'bbbbbbbb-0000-0000-0000-000000000006');
+    raise exception 'FAIL A made a gap from B window';
+  exception when insufficient_privilege then null; end;
+  begin
+    insert into public.reminder_events (id, window_id, kind, at)
+      values (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000006', 'opened', now());
+    raise exception 'FAIL A logged a reminder event on B window';
+  exception when insufficient_privilege then null; end;
+
+  -- weekly totals only count the caller's own outcomes: B has a completed one this week, A has none
+  if exists (select 1 from public.weekly_progress(now() - interval '1 day'))
+  then raise exception 'FAIL weekly_progress counted another participant''s outcome'; end if;
+
   begin  -- own participant id but B's set: composite foreign key rejects it
     insert into public.outcomes (set_id, none_reason) values ('bbbbbbbb-0000-0000-0000-000000000003', 'x');
     raise exception 'FAIL A attached an outcome to B set';
@@ -119,6 +147,10 @@ begin
   begin perform 1 from public.activities; raise exception 'FAIL anon read activities';
   exception when insufficient_privilege then null; end;
   begin perform 1 from public.outcomes;   raise exception 'FAIL anon read outcomes';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from public.reminder_events; raise exception 'FAIL anon read reminder_events';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from public.weekly_progress(now()); raise exception 'FAIL anon ran weekly_progress';
   exception when insufficient_privilege then null; end;
 end $$;
 

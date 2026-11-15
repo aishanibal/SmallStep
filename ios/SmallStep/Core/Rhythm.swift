@@ -25,16 +25,15 @@ enum Rhythm {
     }
 }
 
-enum ParticipantCode {
-    /// Codes are lowercase letters, digits, "-" and "_", 3 to 24 characters.
+enum AccountEmail {
+    /// Trimmed and lowercased if it looks like an email address, otherwise nil.
     static func normalized(_ raw: String) -> String? {
-        let code = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard code.range(of: "^[a-z0-9_-]{3,24}$", options: .regularExpression) != nil else { return nil }
-        return code
+        let email = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard email.count <= 254, email.range(of: #"^[^@\s]+@[^@\s]+\.[^@\s]+$"#, options: .regularExpression) != nil else { return nil }
+        return email
     }
 
-    static func email(for code: String, domain: String = AppConfig.emailDomain) -> String { "\(code)@\(domain)" }
-
     /// Supabase requires at least 6 characters (set in supabase/config.toml and the dashboard).
-    static let minPasscodeLength = 6
+    static let minPasswordLength = 6
 }
+

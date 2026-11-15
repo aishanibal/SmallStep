@@ -6,6 +6,8 @@ struct SuggestionsView: View {
     let minutes: Int
     /// The gap these cards were built for, so "Suggest something else" can ask again without a new gap.
     let gapID: UUID?
+    /// When the gap starts, so the reminder to log it fires when the activity should be over.
+    let gapStart: Date
 
     @State private var result: SuggestionSet
     @State private var selected: UUID?
@@ -14,9 +16,10 @@ struct SuggestionsView: View {
     @State private var swapping = false
     @State private var message: String?
 
-    init(result: SuggestionSet, minutes: Int, gapID: UUID? = nil) {
+    init(result: SuggestionSet, minutes: Int, gapID: UUID? = nil, gapStart: Date = Date()) {
         self.minutes = minutes
         self.gapID = gapID
+        self.gapStart = gapStart
         _result = State(initialValue: result)
     }
 
@@ -31,7 +34,7 @@ struct SuggestionsView: View {
             if cards.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Nothing fits this time").font(.ssTitle).foregroundStyle(Color.ssText).accessibilityAddTraits(.isHeader)
-                    Text("It may be outside your waking hours or in your quiet hours.").ssBodyText()
+                    Text("It may be outside your waking hours, in your quiet hours, or too short once your transition time is kept free.").ssBodyText()
                 }
                 Button("Back") { navigator.goHome() }.buttonStyle(PrimaryButtonStyle())
             } else {
@@ -93,6 +96,7 @@ struct SuggestionsView: View {
         defer { busy = false }
         do {
             let outcomeID = try await backend.chooseSuggestion(setID: setID, suggestionID: id)
+            await model.planOutcomeReminder(outcomeId: outcomeID, card: card, gapStart: gapStart)
             navigator.path.removeLast()
             navigator.path.append(.outcome(.init(outcomeId: outcomeID, card: card, start: .chosen)))
         } catch {

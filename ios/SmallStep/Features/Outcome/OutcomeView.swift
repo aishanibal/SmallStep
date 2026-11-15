@@ -13,7 +13,12 @@ struct OutcomeView: View {
 
     init(context: OutcomeContext) {
         self.context = context
-        _step = State(initialValue: context.start == .chosen ? .start : .doing)
+        let first: Step = switch context.start {
+        case .chosen: .start
+        case .followUp, .reminderOpen, .reminderDone: .doing
+        case .reminderSkip: .skipReason
+        }
+        _step = State(initialValue: first)
     }
 
     private let skipReasons: [(String, String)] = [
@@ -75,6 +80,10 @@ struct OutcomeView: View {
         .gentle(value: step)
         .navigationBarBackButtonHidden(step != .start && step != .doing)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // Done on the reminder: save it straight away, then ask how well it fit.
+            if context.start == .reminderDone, step == .doing { await finish(completed: true) }
+        }
     }
 
     private var summary: some View {
@@ -92,7 +101,9 @@ struct OutcomeView: View {
         busy = true; message = nil
         defer { busy = false }
         do {
-            try await backend.updateOutcome(context.outcomeId, OutcomeUpdate(completed: completed, skipReason: reason))
+            try await backend.updateOutcome(context.outcomeId,
+                OutcomeUpdate(completed: completed, skipReason: reason, via: context.fromReminder ? "reminder" : "app"))
+            await model.outcomeResolved(context.outcomeId)
             if completed { Haptics.soft() }
             step = .rating
         } catch {

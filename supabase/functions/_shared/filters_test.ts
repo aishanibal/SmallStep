@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.13";
-import { allowedActivities, checkCandidate, pickDuration } from "./filters.ts";
-import { MEAL_RULES } from "./filters.config.ts";
+import { allowedActivities, checkCandidate, pickDuration, usableMinutes } from "./filters.ts";
+import { DEFAULT_TRANSITION_MIN, MEAL_RULES } from "./filters.config.ts";
 import { activities, circuit, gapAt, profile, walk } from "./fixtures.ts";
 
 const reason = (v: ReturnType<typeof checkCandidate>) => (v.ok ? "ok" : v.reason);
@@ -77,4 +77,23 @@ Deno.test("allowedActivities returns only the fitting ones with their durations"
   const got = allowedActivities(activities, gapAt("10:00", 12), profile).map((x) => [x.activity.id, x.durationMin]);
   assertEquals(got, [["stretch", 10], ["breathe", 5]]); // walk (20) and circuit (15) are longer than the 12-minute gap
   assert(!got.some(([id]) => id === "circuit"));
+});
+
+Deno.test("transition time: the activity must leave the chosen minutes free before what comes next", () => {
+  const buffered = { ...profile, transition_min: 5 };
+  assertEquals(usableMinutes(gapAt("10:00", 20), buffered), 15);
+  assertEquals(reason(checkCandidate({ durationMin: 15, category: "yoga" }, gapAt("10:00", 20), buffered)), "ok");
+  assertEquals(reason(checkCandidate({ durationMin: 16, category: "yoga" }, gapAt("10:00", 20), buffered)), "too_long");
+  assertEquals(pickDuration(walk, gapAt("10:00", 20), buffered), null);        // 20 min walk no longer fits a 20 min gap
+  assertEquals(pickDuration(walk, gapAt("10:00", 25), buffered), 20);
+  // shortened versions are capped by the usable time too
+  assertEquals(allowedActivities([walk], gapAt("10:00", 12), buffered).map((x) => x.durationMin), [7]);
+  // a gap no longer than the transition time leaves nothing
+  assertEquals(usableMinutes(gapAt("10:00", 4), buffered), 0);
+});
+
+Deno.test("transition time defaults to 5 minutes when the profile has none", () => {
+  assertEquals(DEFAULT_TRANSITION_MIN, 5);
+  assertEquals(usableMinutes(gapAt("10:00", 20), { ...profile, transition_min: undefined }), 15);
+  assertEquals(usableMinutes(gapAt("10:00", 20), { ...profile, transition_min: null }), 15);
 });

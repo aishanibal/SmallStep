@@ -10,6 +10,8 @@ export interface Profile {
   quiet_end: string;
   timezone: string; // IANA name
   wellness_statement: string | null;
+  /** Minutes to keep free before the next commitment. Missing on old rows: treated as the default. */
+  transition_min?: number | null;
 }
 
 export interface Activity {

@@ -1,8 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// First-time setup step 2, and later "Your day" from Home (pass `onSaved` to edit instead of finishing setup).
 struct RhythmSetupView: View {
     @Environment(AppModel.self) private var model
+    var onSaved: (() -> Void)? = nil
+    private var editing: Bool { onSaved != nil }
     @State private var wake = Rhythm.date(minutes: 7 * 60)
     @State private var bedtime = Rhythm.date(minutes: 23 * 60)
     @State private var breakfast = Rhythm.date(minutes: 8 * 60)
@@ -10,6 +13,7 @@ struct RhythmSetupView: View {
     @State private var dinner = Rhythm.date(minutes: 19 * 60)
     @State private var quietStart = Rhythm.date(minutes: 22 * 60)
     @State private var quietEnd = Rhythm.date(minutes: 7 * 60)
+    @State private var transitionMin = 5
     @State private var statement = ""
     @State private var busy = false
     @State private var message: String?
@@ -19,7 +23,7 @@ struct RhythmSetupView: View {
 
     var body: some View {
         ScreenScroll {
-            StepProgress(step: 2, of: 2)
+            if !editing { StepProgress(step: 2, of: 2) }
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Your day").font(.ssTitle).foregroundStyle(Color.ssText).accessibilityAddTraits(.isHeader)
@@ -40,6 +44,17 @@ struct RhythmSetupView: View {
                 Text("No suggestions during these.").ssSecondaryText().padding(.bottom, 8)
                 row("From", $quietStart)
                 row("Until", $quietEnd)
+            }
+            .softCard()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Transition time").ssHeadingText()
+                Text("Minutes to keep free before your next thing, so you're not rushing.").ssSecondaryText()
+                Picker("Transition time", selection: $transitionMin) {
+                    ForEach(Self.transitionChoices, id: \.self) { Text($0 == 0 ? "None" : "\($0) min").tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .frame(minHeight: 44)
             }
             .softCard()
 
@@ -69,12 +84,12 @@ struct RhythmSetupView: View {
             if let message { Text(message).ssBodyText().softCard(tint: .ssTaupeSoft) }
 
             Button(action: { Task { await save() } }) {
-                if busy { ProgressView().tint(Color.ssOnSage) } else { Text("Finish setup") }
+                if busy { ProgressView().tint(Color.ssOnSage) } else { Text(editing ? "Save" : "Finish setup") }
             }
             .buttonStyle(PrimaryButtonStyle()).disabled(busy)
         }
         .onAppear {
-            model.markSetupStarted()
+            if !editing { model.markSetupStarted() }
             if let p = model.profile, p.hasRhythm { load(p) }
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [UTType.calendarEvent, UTType(filenameExtension: "ics")].compactMap { $0 }) { result in
@@ -85,6 +100,8 @@ struct RhythmSetupView: View {
             }
         }
     }
+
+    static let transitionChoices = [0, 5, 10, 15]
 
     private func row(_ title: String, _ value: Binding<Date>) -> some View {
         HStack {
@@ -101,6 +118,7 @@ struct RhythmSetupView: View {
         wake = d(p.wake, wake); bedtime = d(p.bedtime, bedtime); breakfast = d(p.breakfast, breakfast)
         lunch = d(p.lunch, lunch); dinner = d(p.dinner, dinner)
         quietStart = d(p.quietStart, quietStart); quietEnd = d(p.quietEnd, quietEnd)
+        transitionMin = p.transitionMin ?? 5
         statement = p.wellnessStatement ?? ""
     }
 
@@ -111,9 +129,13 @@ struct RhythmSetupView: View {
         let trimmed = statement.trimmingCharacters(in: .whitespacesAndNewlines)
         let update = ProfileUpdate(
             wake: s(wake), bedtime: s(bedtime), breakfast: s(breakfast), lunch: s(lunch), dinner: s(dinner),
-            quietStart: s(quietStart), quietEnd: s(quietEnd), wellnessStatement: trimmed.isEmpty ? nil : trimmed
+            quietStart: s(quietStart), quietEnd: s(quietEnd), transitionMin: transitionMin, wellnessStatement: trimmed.isEmpty ? nil : trimmed
         )
-        do { try await model.saveRhythm(update) }
-        catch { message = "That didn't save. Please try again." }
+        do {
+            try await model.saveRhythm(update)
+            onSaved?()
+        } catch {
+            message = "That didn't save. Please try again."
+        }
     }
 }

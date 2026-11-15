@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -18,6 +19,7 @@ struct RootView: View {
         }
         .gentle(value: model.stage)
         .task { await model.start() }
+        .onChange(of: scenePhase) { if scenePhase == .active, model.stage == .home { Task { await model.syncReminders() } } }
     }
 }
 

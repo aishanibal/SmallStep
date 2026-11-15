@@ -1,8 +1,8 @@
 // Prompts and output validation for Sources A and B.
 // What may leave the system (A): gap minutes, time of day and weekday, optional energy, activity names/categories,
-// rhythm summary, wellness statement, history summary. B: gap minutes and optional energy only.
+// rhythm summary, wellness statement, history summary. B: usable minutes and optional energy only.
 // Calendar event titles never get here: the app sends gaps, not events.
-import { checkCandidate } from "./filters.ts";
+import { checkCandidate, usableMinutes } from "./filters.ts";
 import { clean } from "./history.ts";
 import { localMinuteOfDay, localWeekday, timeOfDay } from "./time.ts";
 import type { Activity, Gap, Profile } from "./types.ts";
@@ -22,6 +22,7 @@ const energyText = (e: Gap["energy"]) => e === null ? "not given" : `${e} of 3 (
 /** Source A: a new suggestion tailored to this person, built from their activities and history. */
 export function buildPromptA(profile: Profile, gap: Gap, activities: Activity[], historyLines: string[]): string {
   const minute = localMinuteOfDay(gap.start, profile.timezone);
+  const usable = usableMinutes(gap, profile);
   const statement = clean(profile.wellness_statement, 200);
   const rows = activities.map((a) =>
     `- ${a.id} | ${clean(a.name)} | ${clean(a.category)} | ${a.duration_min} min | ${a.location} | priority ${a.priority} | ` +
@@ -31,7 +32,7 @@ export function buildPromptA(profile: Profile, gap: Gap, activities: Activity[],
     "You suggest one wellness activity for a free gap in one person's day, tailored to them.",
     "Base it on their own activities and history below. Write a shorter or adapted version of one of their activities,",
     "or a new idea in the same spirit. The title must not be the same as any activity name on their list.",
-    "It must fit inside the gap.",
+    "It must fit inside the gap and leave their transition time free before what comes next.",
     "",
     "Guidance:",
     "- Prefer the kinds of activities this person completes and rates as a good fit in similar time-of-day and gap-length slots (see History).",
@@ -43,7 +44,8 @@ export function buildPromptA(profile: Profile, gap: Gap, activities: Activity[],
     "- Title: 2 to 5 words. Description: one short sentence saying what to do. Reason: one short sentence on why it suits them.",
     "",
     `Gap: ${gap.minutes} minutes, starting ${clock(minute)} on ${localWeekday(gap.start, profile.timezone)} (${timeOfDay(minute)}). ` +
-    `Energy: ${energyText(gap.energy)}.`,
+    `Energy: ${energyText(gap.energy)}. ` +
+    `They want ${gap.minutes - usable} minutes free before their next commitment, so the activity can last at most ${usable} minutes.`,
     `Daily rhythm: ${rhythmSummary(profile)}`,
     ...(statement ? [`What wellness means to them: "${statement}"`] : []),
     "",
@@ -54,19 +56,20 @@ export function buildPromptA(profile: Profile, gap: Gap, activities: Activity[],
     ...historyLines.map((l) => `- ${l}`),
     "",
     'Reply with JSON only: {"title": "<2-5 words>", "description": "<one short sentence>", ' +
-    `"duration_min": <whole number of minutes, at most ${gap.minutes}>, ` +
+    `"duration_min": <whole number of minutes, at most ${usable}>, ` +
     '"based_on": "<id of the activity it builds on, or null>", "reason": "<one short sentence>"}',
   ].join("\n");
 }
 
-export function buildPromptB(gap: Gap): string {
+export function buildPromptB(gap: Gap, profile: Profile): string {
+  const minutes = usableMinutes(gap, profile);
   const energy = gap.energy === null ? "" : ` and energy level ${gap.energy} (1 = low, 3 = high)`;
   return [
-    `I have ${gap.minutes} minutes${energy}. What should I do for my wellness?`,
+    `I have ${minutes} minutes${energy}. What should I do for my wellness?`,
     "Suggest one simple generic idea that a stranger could do. Do not make it a personal routine.",
     "",
     'Reply with JSON only: {"title": "<2-5 words>", "description": "<one short sentence>", "duration_min": <whole number of minutes, at most ' +
-    `${gap.minutes}>}`,
+    `${minutes}>}`,
   ].join("\n");
 }
 

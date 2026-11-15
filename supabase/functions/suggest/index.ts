@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
   const rows = cards.map((c) => ({
     id: crypto.randomUUID(), set_id: setId, sources: c.sources, activity_id: c.activityId, title: c.title,
     description: c.description, duration_min: c.durationMin, position: c.position, reason_text: c.reasonText,
-    prompt_snapshot: c.promptSnapshot, model: c.model, latency_ms: c.latencyMs, error: c.error,
+    prompt_snapshot: c.promptSnapshot, model: c.model, latency_ms: c.latencyMs, error: c.error, generation: c.generation,
   }));
   const { error: sugError } = await db.from("suggestions").insert(rows);
   if (sugError) {

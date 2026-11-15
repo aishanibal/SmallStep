@@ -1,6 +1,6 @@
-// Hard filters applied in code to ALL sources: waking hours, quiet hours, fit the gap, meal windows.
+// Hard filters applied in code to ALL sources: waking hours, quiet hours, fit the gap (minus transition time), meal windows.
 import { localMinuteOfDay, mod, parseClock } from "./time.ts";
-import { MEAL_RULES, type MealRules } from "./filters.config.ts";
+import { DEFAULT_TRANSITION_MIN, MEAL_RULES, type MealRules } from "./filters.config.ts";
 import type { Activity, Gap, Profile } from "./types.ts";
 
 export type Rejection = "too_long" | "outside_waking_hours" | "quiet_hours" | "after_meal";
@@ -12,6 +12,11 @@ export interface Candidate {
   category?: string | null;
   /** Title and description, used only when there is no category. */
   text?: string;
+}
+
+/** Minutes of the gap an activity may use: the gap minus the participant's transition time. */
+export function usableMinutes(gap: Gap, profile: Profile): number {
+  return Math.max(0, gap.minutes - (profile.transition_min ?? DEFAULT_TRANSITION_MIN));
 }
 
 /** True if [start, start+len) overlaps the daily-repeating window [winStart, winStart+winLen). Minutes of day. */
@@ -34,7 +39,7 @@ export function checkCandidate(
   profile: Profile,
   rules: MealRules = MEAL_RULES,
 ): Verdict {
-  if (c.durationMin > gap.minutes) return { ok: false, reason: "too_long" };
+  if (c.durationMin > usableMinutes(gap, profile)) return { ok: false, reason: "too_long" };
 
   const start = localMinuteOfDay(gap.start, profile.timezone);
   const len = c.durationMin;
@@ -76,7 +81,7 @@ export function shortenedDuration(
   profile: Profile,
   rules: MealRules = MEAL_RULES,
 ): number | null {
-  for (let d = Math.min(a.duration_min, gap.minutes); d >= 5; d--) {
+  for (let d = Math.min(a.duration_min, usableMinutes(gap, profile)); d >= 5; d--) {
     if (checkCandidate({ durationMin: d, category: a.category }, gap, profile, rules).ok) return d;
   }
   return null;

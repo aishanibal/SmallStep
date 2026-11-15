@@ -8,6 +8,8 @@ import type { ModelCaller } from "./gemini.ts";
 import type { Activity, Gap, HistoryEvent, Profile, ShownRecord } from "./types.ts";
 
 export type Source = "A" | "A_fallback" | "B" | "C";
+/** How the card was produced: the model answered, a fallback stood in after it failed, or the participant's own list. */
+export type Generation = "model" | "fallback" | "list";
 
 export interface Card {
   sources: Source[]; // more than one when two sources picked the same activity
@@ -20,6 +22,7 @@ export interface Card {
   model: string | null;
   latencyMs: number | null;
   error: string | null;
+  generation: Generation;
   position: number;
 }
 
@@ -94,20 +97,20 @@ async function sourceA(input: SuggestInput, allowed: Allowed[], history: string[
     const a = parseA(reply.text, input.gap, input.profile, input.activities);
     return {
       ...base, sources: ["A"], activityId: a.basedOn?.id ?? null, title: a.title, description: a.description,
-      durationMin: a.durationMin, reasonText: a.reason, latencyMs: reply.latencyMs, error: null,
+      durationMin: a.durationMin, reasonText: a.reason, latencyMs: reply.latencyMs, error: null, generation: "model",
     };
   } catch (e) {
     const pick = ruleBasedPick(allowed, input);
     if (!pick) return null;   // nothing of theirs fits this gap
     return {
       ...base, sources: ["A_fallback"], activityId: pick.activity.id, title: pick.activity.name,
-      description: plainLine(pick.activity), durationMin: pick.durationMin, reasonText: null, latencyMs: null, error: errorText(e),
+      description: plainLine(pick.activity), durationMin: pick.durationMin, reasonText: null, latencyMs: null, error: errorText(e), generation: "fallback",
     };
   }
 }
 
 async function sourceB(input: SuggestInput, deps: Deps): Promise<Omit<Card, "position"> | null> {
-  const prompt = buildPromptB(input.gap);
+  const prompt = buildPromptB(input.gap, input.profile);
   const base = { sources: ["B"] as Source[], activityId: null, reasonText: null, promptSnapshot: prompt, model: deps.modelName };
   let error: string;
   let latencyMs: number | null = null;
@@ -115,7 +118,7 @@ async function sourceB(input: SuggestInput, deps: Deps): Promise<Omit<Card, "pos
     const reply = await deps.callModel(prompt);
     latencyMs = reply.latencyMs;
     const b = parseB(reply.text, input.gap, input.profile);
-    return { ...base, title: b.title, description: b.description, durationMin: b.durationMin, latencyMs, error: null };
+    return { ...base, title: b.title, description: b.description, durationMin: b.durationMin, latencyMs, error: null, generation: "model" };
   } catch (e) {
     error = errorText(e);
   }
@@ -125,7 +128,7 @@ async function sourceB(input: SuggestInput, deps: Deps): Promise<Omit<Card, "pos
   );
   if (options.length === 0) return null;
   const idea = options[Math.floor(deps.rng() * options.length)];
-  return { ...base, title: idea.title, description: idea.description, durationMin: idea.durationMin, latencyMs, error };
+  return { ...base, title: idea.title, description: idea.description, durationMin: idea.durationMin, latencyMs, error, generation: "fallback" };
 }
 
 /** Source C: a random fitting activity. Prefer one that is not the activity A built on and whose name does not read like A's title. */
@@ -137,7 +140,7 @@ function sourceC(allowed: Allowed[], deps: Deps, avoid: { id: string | null; tit
   const { activity: a, durationMin } = pool[Math.floor(deps.rng() * pool.length)];
   return {
     sources: ["C"], activityId: a.id, title: a.name, description: plainLine(a), durationMin,
-    reasonText: null, promptSnapshot: null, model: null, latencyMs: null, error: null,
+    reasonText: null, promptSnapshot: null, model: null, latencyMs: null, error: null, generation: "list",
   };
 }
 

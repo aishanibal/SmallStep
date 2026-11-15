@@ -1,18 +1,14 @@
 import XCTest
 @testable import SmallStep
 
-final class ParticipantCodeTests: XCTestCase {
+final class AccountEmailTests: XCTestCase {
     func testNormalizesAndValidates() {
-        XCTAssertEqual(ParticipantCode.normalized("  Maple-17 "), "maple-17")
-        XCTAssertEqual(ParticipantCode.normalized("a_b-9"), "a_b-9")
-        XCTAssertNil(ParticipantCode.normalized("ab"))                       // too short
-        XCTAssertNil(ParticipantCode.normalized("has space"))
-        XCTAssertNil(ParticipantCode.normalized("name@mail.com"))            // no personal email addresses
-        XCTAssertNil(ParticipantCode.normalized(String(repeating: "a", count: 25)))
-    }
-
-    func testSyntheticEmail() {
-        XCTAssertEqual(ParticipantCode.email(for: "maple-17", domain: "study.example"), "maple-17@study.example")
+        XCTAssertEqual(AccountEmail.normalized("  Sam.Lee@School.edu "), "sam.lee@school.edu")
+        XCTAssertEqual(AccountEmail.normalized("maple-17@study.smallstep.example"), "maple-17@study.smallstep.example")
+        XCTAssertNil(AccountEmail.normalized("maple-17"))            // no @
+        XCTAssertNil(AccountEmail.normalized("sam@school"))          // no domain ending
+        XCTAssertNil(AccountEmail.normalized("sam lee@school.edu"))
+        XCTAssertNil(AccountEmail.normalized(""))
     }
 }
 

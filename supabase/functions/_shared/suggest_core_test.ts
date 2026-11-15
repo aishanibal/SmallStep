@@ -187,3 +187,23 @@ Deno.test("the fallback pick follows priority, intention, recency and avoids the
   assertEquals(ruleBasedPick(allowed, justDid)!.activity.id, "stretch");
   assertEquals(ruleBasedPick([], input()), null);
 });
+
+Deno.test("generation: model when Gemini's answer is used, fallback when it failed, list for Source C", async () => {
+  const ok = (await generateCards(input(), deps(modelReturning(goodA, goodB).call))).cards;
+  assertEquals(cardA(ok).generation, "model");
+  assertEquals(ok.find((c) => c.sources[0] === "B")!.generation, "model");
+  assertEquals(ok.find((c) => c.sources[0] === "C")!.generation, "list");
+  const failing: ModelCaller = () => Promise.reject(new Error("gemini http 503"));
+  const bad = (await generateCards(input(), deps(failing))).cards;
+  assertEquals(cardA(bad).generation, "fallback");
+  assertEquals(bad.find((c) => c.sources[0] === "B")!.generation, "fallback");
+});
+
+Deno.test("transition time reaches both prompts as the most the activity may last", async () => {
+  const m = modelReturning(goodA, goodB);
+  await generateCards(input({ profile: { ...profile, transition_min: 5 } }), deps(m.call)); // 20 min gap
+  const [a, b] = [m.prompts.find(isA)!, m.prompts.find((p) => !isA(p))!];
+  assertStringIncludes(a, "5 minutes free before their next commitment, so the activity can last at most 15 minutes");
+  assertStringIncludes(a, "at most 15>");
+  assertStringIncludes(b, "I have 15 minutes");
+});

@@ -11,19 +11,47 @@ struct ProfileRow: Codable, Equatable {
     var dinner: String?
     var quietStart: String?
     var quietEnd: String?
+    var transitionMin: Int?
     var timezone: String?
     var wellnessStatement: String?
     var setupSeconds: Int?
     var consentedAt: Date?
+    var remindersOn: Bool?
+    var reminderDailyCap: Int?
+    var remindersPausedUntil: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, wake, bedtime, breakfast, lunch, dinner, timezone
-        case quietStart = "quiet_start", quietEnd = "quiet_end"
+        case quietStart = "quiet_start", quietEnd = "quiet_end", transitionMin = "transition_min"
         case wellnessStatement = "wellness_statement", setupSeconds = "setup_seconds", consentedAt = "consented_at"
+        case remindersOn = "reminders_on", reminderDailyCap = "reminder_daily_cap", remindersPausedUntil = "reminders_paused_until"
     }
 
     var hasRhythm: Bool {
         [wake, bedtime, breakfast, lunch, dinner, quietStart, quietEnd, timezone].allSatisfy { $0 != nil }
+    }
+}
+
+/// The Reminders screen's fields. Always sends every field, so Resume can clear the pause (null).
+struct ReminderSettingsUpdate: Encodable {
+    var remindersOn: Bool
+    var dailyCap: Int
+    var pausedUntil: Date?
+    var quietStart: String
+    var quietEnd: String
+
+    enum CodingKeys: String, CodingKey {
+        case remindersOn = "reminders_on", dailyCap = "reminder_daily_cap", pausedUntil = "reminders_paused_until"
+        case quietStart = "quiet_start", quietEnd = "quiet_end"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(remindersOn, forKey: .remindersOn)
+        try c.encode(dailyCap, forKey: .dailyCap)
+        try c.encode(pausedUntil, forKey: .pausedUntil)     // encodes null when nil
+        try c.encode(quietStart, forKey: .quietStart)
+        try c.encode(quietEnd, forKey: .quietEnd)
     }
 }
 
@@ -36,6 +64,7 @@ struct ProfileUpdate: Encodable {
     var dinner: String?
     var quietStart: String?
     var quietEnd: String?
+    var transitionMin: Int?
     var timezone: String?
     var wellnessStatement: String?
     var setupSeconds: Int?
@@ -43,7 +72,7 @@ struct ProfileUpdate: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case wake, bedtime, breakfast, lunch, dinner, timezone
-        case quietStart = "quiet_start", quietEnd = "quiet_end"
+        case quietStart = "quiet_start", quietEnd = "quiet_end", transitionMin = "transition_min"
         case wellnessStatement = "wellness_statement", setupSeconds = "setup_seconds", consentedAt = "consented_at"
     }
 }
@@ -94,11 +123,33 @@ struct ActivityWrite: Encodable {
     }
 }
 
+enum GapOrigin: String, Encodable { case manual, calendar, windowReminder = "window_reminder" }
+
 struct GapInsert: Encodable {
     var startTime: Date
     var minutes: Int
     var energy: Int?
-    enum CodingKeys: String, CodingKey { case startTime = "start_time", minutes, energy }
+    var origin: GapOrigin = .manual
+    var windowId: UUID?
+    enum CodingKeys: String, CodingKey { case startTime = "start_time", minutes, energy, origin, windowId = "window_id" }
+}
+
+/// A usual free time the student entered, e.g. Mondays at 14:00 for 45 minutes. Weekday is ISO (1 = Monday).
+struct ReminderWindow: Codable, Identifiable, Hashable {
+    let id: UUID
+    let weekday: Int
+    let startTime: String       // "HH:mm:ss", local
+    let minutes: Int
+    enum CodingKeys: String, CodingKey { case id, weekday, minutes, startTime = "start_time" }
+
+    var startMinute: Int { Rhythm.minutes(fromClock: startTime) ?? 0 }
+}
+
+struct ReminderWindowInsert: Encodable {
+    var weekday: Int
+    var startTime: String
+    var minutes: Int
+    enum CodingKeys: String, CodingKey { case weekday, minutes, startTime = "start_time" }
 }
 
 struct IDRow: Decodable { let id: UUID }
@@ -138,7 +189,21 @@ struct OutcomeUpdate: Encodable {
     var completed: Bool?
     var skipReason: String?
     var fitRating: Int?
-    enum CodingKeys: String, CodingKey { case completed, skipReason = "skip_reason", fitRating = "fit_rating" }
+    /// "app" or "reminder": where Done/Skip was recorded.
+    var via: String?
+    enum CodingKeys: String, CodingKey { case completed, via, skipReason = "skip_reason", fitRating = "fit_rating" }
+}
+
+/// One line in reminder_events. The id is made on the phone so a resend after a failed upload is ignored.
+/// About exactly one thing: an outcome reminder or a free-time window.
+struct ReminderEventInsert: Codable, Equatable {
+    var id = UUID()
+    var outcomeId: UUID?
+    var windowId: UUID?
+    var kind: String
+    var detail: String?
+    var at = Date()
+    enum CodingKeys: String, CodingKey { case id, kind, detail, at, outcomeId = "outcome_id", windowId = "window_id" }
 }
 
 /// An outcome that was chosen but not yet marked done or skipped.

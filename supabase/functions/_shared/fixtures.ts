@@ -3,7 +3,7 @@ import type { Activity, Gap, HistoryEvent, Profile } from "./types.ts";
 
 export const profile: Profile = {
   wake: "07:00", bedtime: "23:00", breakfast: "08:00", lunch: "12:30", dinner: "19:00",
-  quiet_start: "22:00", quiet_end: "07:00", timezone: "America/New_York", wellness_statement: null,
+  quiet_start: "22:00", quiet_end: "07:00", timezone: "America/New_York", wellness_statement: null, transition_min: 0,
 };
 
 export const walk: Activity = { id: "walk", name: "Morning walk", category: "movement", duration_min: 20, location: "outdoors", priority: 3, weekly_intention: 4 };

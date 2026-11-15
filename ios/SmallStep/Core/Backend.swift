@@ -5,16 +5,16 @@ import Supabase
 enum BackendError: LocalizedError {
     case notConfigured
     case signUpNeedsConfirmation
-    case codeAlreadyUsed
+    case emailAlreadyUsed
     case sessionNotKept
     case setupIncomplete
     case server(String)
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: "The app isn't connected to the study yet."
-        case .signUpNeedsConfirmation: "This study account needs an email step that isn't switched on. Please tell the study team."
-        case .codeAlreadyUsed: "That code is already in use. Check the passcode, or choose another code."
+        case .notConfigured: "The app isn't connected yet."
+        case .signUpNeedsConfirmation: "Check your email to confirm your account, then sign in."
+        case .emailAlreadyUsed: "An account with that email already exists. Try signing in instead."
         case .sessionNotKept: "This phone couldn't keep you signed in. Please try again."
         case .setupIncomplete: "Let's finish setting up first."
         case .server(let detail): detail
@@ -56,9 +56,9 @@ final class Backend {
         }
     }
 
-    func signIn(email: String, passcode: String) async throws -> SignInResult {
+    func signIn(email: String, password: String) async throws -> SignInResult {
         do {
-            _ = try await client.auth.signIn(email: email, password: passcode)
+            _ = try await client.auth.signIn(email: email, password: password)
             return .signedIn
         } catch let error as AuthError {
             if case .api(_, let code, _, _) = error, code == .invalidCredentials { return .unknownCredentials }
@@ -66,19 +66,19 @@ final class Backend {
         }
     }
 
-    func createAccount(email: String, passcode: String) async throws {
+    func createAccount(email: String, password: String) async throws {
         let response: AuthResponse
         do {
-            response = try await client.auth.signUp(email: email, password: passcode)
+            response = try await client.auth.signUp(email: email, password: password)
         } catch let error as AuthError {
             if case .api(_, let code, _, _) = error, code == .emailExists || code == .userAlreadyExists {
-                throw BackendError.codeAlreadyUsed
+                throw BackendError.emailAlreadyUsed
             }
             throw error
         }
         // GoTrue hides an existing account as a user with no identities and no session.
         if response.session == nil {
-            if response.user.identities?.isEmpty == true { throw BackendError.codeAlreadyUsed }
+            if response.user.identities?.isEmpty == true { throw BackendError.emailAlreadyUsed }
             throw BackendError.signUpNeedsConfirmation
         }
     }
@@ -166,6 +166,60 @@ final class Backend {
 
     func updateOutcome(_ id: UUID, _ update: OutcomeUpdate) async throws {
         try await client.from("outcomes").update(update).eq("id", value: id).execute()
+    }
+
+    /// True while a chosen outcome still needs Done or Skip. Used before opening the screen from a reminder.
+    func outcomeIsOpen(_ id: UUID) async throws -> Bool {
+        let rows: [OutcomeRow] = try await client.from("outcomes")
+            .select("id, set_id, chosen_suggestion_id, completed").eq("id", value: id).execute().value
+        return rows.first.map { $0.chosenSuggestionId != nil && $0.completed == nil } ?? false
+    }
+
+    /// Completed outcomes per activity for the week starting at `weekStart`. Totals only; sources stay hidden.
+    func weeklyProgress(weekStart: Date) async throws -> [ProgressRow] {
+        struct Params: Encodable { let week_start: Date }
+        return try await client.rpc("weekly_progress", params: Params(week_start: weekStart)).execute().value
+    }
+
+    // MARK: Reminders
+
+    /// The student's current free-time windows (removed ones are kept on the server but not returned).
+    func loadWindows(_ participant: UUID) async throws -> [ReminderWindow] {
+        try await client.from("reminder_windows").select("id, weekday, start_time, minutes")
+            .eq("participant_id", value: participant).is("removed_at", value: nil)
+            .order("weekday").order("start_time").execute().value
+    }
+
+    func insertWindows(_ windows: [ReminderWindowInsert]) async throws {
+        guard !windows.isEmpty else { return }
+        try await client.from("reminder_windows").insert(windows).execute()
+    }
+
+    func removeWindow(_ id: UUID) async throws {
+        struct Removed: Encodable { let removed_at: Date }
+        try await client.from("reminder_windows").update(Removed(removed_at: Date())).eq("id", value: id).execute()
+    }
+
+    func updateReminderSettings(_ id: UUID, _ update: ReminderSettingsUpdate) async throws {
+        try await client.from("profiles").update(update).eq("id", value: id).execute()
+    }
+
+    /// Sends queued reminder events and returns the ids that no longer need sending: saved, or refused by
+    /// the server (for example an outcome that no longer exists). Network failures stay queued. Resends are ignored.
+    func uploadReminderEvents(_ events: [ReminderEventInsert]) async -> Set<UUID> {
+        func send(_ batch: [ReminderEventInsert]) async throws {
+            try await client.from("reminder_events")
+                .upsert(batch, onConflict: "id", returning: .minimal, ignoreDuplicates: true).execute()
+        }
+        guard !events.isEmpty else { return [] }
+        if (try? await send(events)) != nil { return Set(events.map(\.id)) }
+        var finished: Set<UUID> = []
+        for event in events {
+            do { try await send([event]); finished.insert(event.id) }
+            catch is PostgrestError { finished.insert(event.id) }
+            catch { break }
+        }
+        return finished
     }
 
     /// The most recent chosen-but-unresolved outcome, if any.

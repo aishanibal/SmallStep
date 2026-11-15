@@ -11,6 +11,5 @@ enum AppConfig {
 
     static var supabaseURL: URL? { value("SUPABASE_URL").flatMap(URL.init(string:)) }
     static var publishableKey: String? { value("SUPABASE_PUBLISHABLE_KEY") }
-    static var emailDomain: String { value("PARTICIPANT_EMAIL_DOMAIN") ?? "study.smallstep.example" }
     static var isConfigured: Bool { supabaseURL != nil && publishableKey != nil }
 }

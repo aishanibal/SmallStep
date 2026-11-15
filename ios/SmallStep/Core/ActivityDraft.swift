@@ -37,6 +37,6 @@ struct ActivityDraft: Identifiable, Equatable {
     }
 
     var summary: String {
-        "\(category.capitalized) · \(durationMin) min · \(location.label.lowercased())"
+        "\(category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized) · \(durationMin) min · \(location.label.lowercased())"
     }
 }

@@ -96,7 +96,7 @@ your Gemini key (a Supabase secret) and the project's public **publishable** key
    If the bundle identifier `study.smallstep.app` is taken, change it in `ios/project.yml` and regenerate.
 4. Pick an iPhone simulator and press Run (⌘R).
 
-First launch: consent → participant code + passcode (6+ characters; a new code is created on first use) →
+First launch: consent → sign in or create an account with email + password (6+ characters) →
 activities → daily rhythm → home.
 
 ### Rebuild and reinstall on a phone
@@ -141,8 +141,8 @@ the participant's own time zone.
 
 ## 5. Privacy and safety design
 
-- **No personal information.** Login is a participant code + passcode, mapped to `code@<domain>`. Nothing else
-  identifying is collected, and no sleep, weight, calories or mood.
+- **Minimal personal information.** Login is an email + password (Supabase Auth). Nothing else identifying is
+  collected, and no sleep, weight, calories or mood.
 - **Row Level Security is on for every table.** A participant can only read and write their own rows (checked by
   `rls_check.sql`). Participants cannot write suggestion sets or suggestions at all; only the `suggest` function can.
 - **The source is hidden at the database level too.** Participants can't read `sources`, `activity_id`,

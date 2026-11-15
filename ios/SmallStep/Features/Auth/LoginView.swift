@@ -1,46 +1,44 @@
 import SwiftUI
 
+/// Email and password, with a switch between signing in and creating an account.
 struct LoginView: View {
     @Environment(AppModel.self) private var model
-    @State private var code = ""
-    @State private var passcode = ""
+    @State private var mode: Mode = .signIn
+    @State private var email = ""
+    @State private var password = ""
     @State private var busy = false
     @State private var message: String?
     @State private var detail: String?
-    @State private var offerCreate = false
     @FocusState private var focus: Field?
-    private enum Field { case code, passcode }
+    private enum Field { case email, password }
+    private enum Mode { case signIn, create }
+
+    private var creating: Bool { mode == .create }
 
     var body: some View {
         ScreenScroll {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Sign in").font(.ssTitle).foregroundStyle(Color.ssText).accessibilityAddTraits(.isHeader)
-                Text("Enter a participant code and passcode. Use the same ones to get your data back on another install.")
-                    .ssBodyText()
+                Text(creating ? "Create account" : "Sign in")
+                    .font(.ssTitle).foregroundStyle(Color.ssText).accessibilityAddTraits(.isHeader)
+                Text(creating ? "Welcome to SmallStep." : "Welcome back.").ssBodyText()
             }
 
             VStack(alignment: .leading, spacing: 18) {
-                field("Participant code") {
-                    TextField("e.g. maple-17", text: $code)
+                field("Email") {
+                    TextField("you@example.com", text: $email)
+                        .keyboardType(.emailAddress).textContentType(.username)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .focused($focus, equals: .code).submitLabel(.next)
-                        .onSubmit { focus = .passcode }
+                        .focused($focus, equals: .email).submitLabel(.next)
+                        .onSubmit { focus = .password }
                 }
-                field("Passcode (at least \(ParticipantCode.minPasscodeLength) characters)") {
-                    SecureField("Passcode", text: $passcode)
-                        .focused($focus, equals: .passcode).submitLabel(.go)
+                field(creating ? "Password (at least \(AccountEmail.minPasswordLength) characters)" : "Password") {
+                    SecureField("Password", text: $password)
+                        .textContentType(creating ? .newPassword : .password)
+                        .focused($focus, equals: .password).submitLabel(.go)
                         .onSubmit { Task { await submit() } }
                 }
             }
             .softCard()
-
-            if offerCreate {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No account with that code and passcode.").ssHeadingText()
-                    Text("Create one, or check what you typed.").ssBodyText()
-                }
-                .softCard(tint: .ssBlueSoft)
-            }
 
             if let message {
                 VStack(alignment: .leading, spacing: 6) {
@@ -52,17 +50,21 @@ struct LoginView: View {
 
             VStack(spacing: 8) {
                 Button(action: { Task { await submit() } }) {
-                    if busy { ProgressView().tint(Color.ssOnSage) } else { Text(offerCreate ? "Create with this passcode" : "Continue") }
+                    if busy { ProgressView().tint(Color.ssOnSage) } else { Text(creating ? "Create account" : "Sign in") }
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(busy || code.isEmpty || passcode.isEmpty)
-                if offerCreate {
-                    Button("Edit") { offerCreate = false; focus = .code }.buttonStyle(QuietButtonStyle())
+                .disabled(busy || email.isEmpty || password.isEmpty)
+
+                Button(creating ? "Already have an account? Sign in" : "New here? Create an account") {
+                    mode = creating ? .signIn : .create
+                    message = nil; detail = nil
                 }
+                .buttonStyle(QuietButtonStyle()).disabled(busy)
             }
         }
-        .onChange(of: code) { offerCreate = false; message = nil }
-        .onChange(of: passcode) { offerCreate = false; message = nil }
+        .gentle(value: mode)
+        .onChange(of: email) { message = nil; detail = nil }
+        .onChange(of: password) { message = nil; detail = nil }
         .fadeIn()
     }
 
@@ -77,26 +79,27 @@ struct LoginView: View {
     private func submit() async {
         guard !busy else { return }
         message = nil; detail = nil
-        guard let normalized = ParticipantCode.normalized(code) else {
-            message = "Codes use letters, numbers, dashes or underscores (3 to 24 characters)."
+        guard let normalized = AccountEmail.normalized(email) else {
+            message = "Please enter a valid email address."
             return
         }
-        guard passcode.count >= ParticipantCode.minPasscodeLength else {
-            message = "Please use at least \(ParticipantCode.minPasscodeLength) characters for the passcode."
+        if creating, password.count < AccountEmail.minPasswordLength {
+            message = "Please use at least \(AccountEmail.minPasswordLength) characters for your password."
             return
         }
         busy = true
         defer { busy = false }
         do {
-            if offerCreate {
-                try await model.createAccount(code: normalized, passcode: passcode)
-            } else if try await model.signIn(code: normalized, passcode: passcode) == .unknownCredentials {
-                offerCreate = true
+            if creating {
+                try await model.createAccount(email: normalized, password: password)
+            } else if try await model.signIn(email: normalized, password: password) == .unknownCredentials {
+                message = "That email and password don't match an account."
+                detail = "Check what you typed, or create an account."
             }
         } catch let error as BackendError {
             message = error.localizedDescription
         } catch {
-            message = "Sign-in didn't work."
+            message = creating ? "Couldn't create your account." : "Sign-in didn't work."
             detail = error.localizedDescription
         }
     }

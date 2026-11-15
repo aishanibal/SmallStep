@@ -12,3 +12,6 @@ xcuserdata/
 
 # local Supabase settings (publishable key + project URL)
 ios/Config.local.xcconfig
+
+# study data, analysis scripts and results (kept local)
+analysis/
